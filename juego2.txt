@@ -1,0 +1,261 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.Random;
+
+public class Juego2 extends JFrame {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	public static final int FILAS = 31;
+    public static final int COLUMNAS = 28;
+    public int tamanoCelda;
+    public char[][] mapa;
+    public Pacman pacman;
+    public ArrayList<Enemigo> enemigos;
+    public JPanel panelJuego;
+    public JPanel panelInfo; // Panel negro para la información
+    public Timer timer;
+    public boolean juegoTerminado = false;
+    private boolean invulnerable = false; // Estado de invulnerabilidad
+    private JLabel labelTiempo; // Label para mostrar el tiempo
+    private int vidas = 3; // Número de vidas
+    private Image corazonImage; // Imagen del corazón
+    private int tiempoTranscurrido = 0; // Inicializa el tiempo transcurrido
+
+    public Juego2() {
+        mapa = new char[FILAS][COLUMNAS];
+        establecerTamanoCelda();
+        generarMapa();
+        inicializarInterfaz();
+        enemigos = new ArrayList<>();
+        crearEnemigos(0);
+        iniciarMovimiento();
+        iniciarContadorTiempo(); // Iniciar el contador de tiempo
+        cargarImagenes(); // Cargar la imagen del corazón
+    }
+
+    private void establecerTamanoCelda() {
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int screenHeight = (int)(screenSize.height * 0.8);
+        int screenWidth = (int)(screenSize.width * 0.8);
+        
+        int tamanoBasadoEnAltura = screenHeight / FILAS;
+        int tamanoBasadoEnAncho = screenWidth / COLUMNAS;
+        
+        tamanoCelda = Math.min(tamanoBasadoEnAltura, tamanoBasadoEnAncho);
+        tamanoCelda = Math.max(tamanoCelda, 15); // Mínimo tamaño
+    }
+
+    private void cargarImagenes() {
+        corazonImage = new ImageIcon("E:\\PacMan\\src\\Imagenes\\corazon.png").getImage(); // Cargar la imagen del corazón
+    }
+
+    private void generarMapa() {
+        String[] mapaDiseno = {
+            "############################",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#.####.#####.##.#####.####.#",
+            "#.####.#####.##.#####.####.#",
+            "#..........................#",
+            "#.####.##.########.##.####.#",
+            "#.####.##.########.##.####.#",
+            "#......##....##....##......#",
+            "######.##### ## #####.######",
+            "######.##### ## #####.######",
+            "######.##          ##.######",
+            "######.## ###--### ##.######",
+            "######.## #      # ##.######",
+            "#     .   #  P   #   .     #",
+            "######.## #      # ##.######",
+            "######.## ######## ##.######",
+            "######.##          ##.######",
+            "######.## ######## ##.######",
+            "######.## ######## ##.######",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#.####.#####.##.#####.####.#",
+            "#...##................##...#",
+            "###.##.##.########.##.##.###",
+            "###.##.##.########.##.##.###",
+            "#......##....##....##......#",
+            "#.##########.##.##########.#",
+            "#.##########.##.##########.#",
+            "#..........................#",
+            "############################"
+        };
+
+        for (int i = 0; i < FILAS; i++) {
+            for (int j = 0; j < COLUMNAS; j++) {
+                mapa[i][j] = mapaDiseno[i].charAt(j);
+                if (mapa[i][j] == 'P') {
+                    pacman = new Pacman(j, i);
+                    mapa[i][j] = '.';
+                }
+            }
+        }
+    }
+
+    private void inicializarInterfaz() {
+        setTitle("Pacman");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        panelJuego = new PanelJuego2(this);
+        JScrollPane scrollPane = new JScrollPane(panelJuego);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        scrollPane.setBorder(null);
+        
+        panelInfo = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // Dibujar corazones
+                for (int i = 0; i < vidas; i++) {
+                    g.drawImage(corazonImage, 30 + i * 50, 10, 30, 30, this);
+                }
+            }
+        };
+        panelInfo.setBackground(Color.BLACK); // Fondo negro
+        panelInfo.setPreferredSize(new Dimension(200, FILAS * tamanoCelda)); // Ajustar tamaño del panel negro
+        panelInfo.setLayout(new BoxLayout(panelInfo, BoxLayout.Y_AXIS)); // Usar BoxLayout
+
+        labelTiempo = new JLabel("Tiempo: 0:00");
+        labelTiempo.setForeground(Color.WHITE);
+        labelTiempo.setAlignmentX(Component.CENTER_ALIGNMENT); // Centrar el texto
+        panelInfo.add(Box.createVerticalStrut(50)); // Espaciador para separar corazones y tiempo
+        panelInfo.add(labelTiempo); // Agregar el label del tiempo
+
+        add(scrollPane, BorderLayout.CENTER);
+        add(panelInfo, BorderLayout.EAST); // Agregar el panel negro a la derecha
+
+        setFocusable(true);
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                pacman.cambiarDireccion(e.getKeyCode());
+            }
+        });
+
+        // Establecer un tamaño fijo para la ventana
+        int width = COLUMNAS * tamanoCelda + 250; // Aumentar ancho por el panel
+        int height = FILAS * tamanoCelda + 50; // Alto con un margen
+        setSize(width, height);
+        
+        setMinimumSize(new Dimension(width, height));
+        
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    private void iniciarMovimiento() {
+        timer = new Timer(16, e -> {
+            if (!juegoTerminado) {
+                pacman.mover(mapa);
+                moverEnemigos();
+                verificarColision();
+                panelJuego.repaint();
+                panelInfo.repaint(); // Repintar el panel de información
+            }
+        });
+        timer.start();
+    }
+
+    private void iniciarContadorTiempo() {
+        Timer tiempoTimer = new Timer(1000, e -> {
+            tiempoTranscurrido++; // Aumenta el tiempo transcurrido en 1 segundo
+            int minutos = tiempoTranscurrido / 60; // Calcula los minutos
+            int segundos = tiempoTranscurrido % 60; // Calcula los segundos
+            labelTiempo.setText(String.format("Tiempo: %d:%02d", minutos, segundos)); // Actualiza el label
+        });
+        tiempoTimer.start(); // Inicia el timer
+    }
+
+    private void crearEnemigos(int cantidad) {
+        Random random = new Random();
+        for (int i = 0; i < cantidad; i++) {
+            double enemigoX, enemigoY;
+            do {
+                enemigoX = random.nextInt(COLUMNAS);
+                enemigoY = random.nextInt(FILAS);
+            } while (mapa[(int)enemigoY][(int)enemigoX] == '#' || 
+                     (Math.abs(enemigoX - pacman.getX()) < 5 && Math.abs(enemigoY - pacman.getY()) < 5));
+            
+            enemigos.add(new Enemigo(enemigoX, enemigoY));
+        }
+    }
+
+    private void moverEnemigos() {
+        for (Enemigo enemigo : enemigos) {
+            enemigo.mover(mapa);
+        }
+    }
+
+    private boolean todaLaComidaFueComida() {
+        for (int i = 0; i < FILAS; i++) {
+            for (int j = 0; j < COLUMNAS; j++) {
+                if (mapa[i][j] == '.') {
+                    return false; // Aún queda comida en el mapa
+                }
+            }
+        }
+        return true; // No queda más comida en el mapa
+    }
+
+    private void verificarColision() {
+        for (Enemigo enemigo : enemigos) {
+            if (Math.abs(enemigo.x - pacman.getX()) < 0.5 && Math.abs(enemigo.y - pacman.getY()) < 0.5) {
+                if (!invulnerable) { // Solo perder vida si no está invulnerable
+                    vidas--; // Resta una vida
+
+                    if (vidas < 0) vidas = 0; // Evitar que las vidas sean negativas
+
+                    panelInfo.repaint(); // Repintar el panel de información
+
+                    if (vidas <= 0) {
+                        juegoTerminado = true;
+                        timer.stop();
+                        JOptionPane.showMessageDialog(this, "¡Game Over!", "Fin del juego", JOptionPane.INFORMATION_MESSAGE);
+                        System.exit(0);
+                    } else {
+                        activarEscudoTemporal(); // Activa el escudo
+                    }
+                }
+            }
+        }
+
+        // Nuevos códigos para verificar si se ha comido toda la comida
+        if (todaLaComidaFueComida()) {
+            juegoTerminado = true;
+            timer.stop();
+            this.dispose(); // Cerrar la ventana del juego actual
+            Juego ventanaJuego2 = new Juego(); // Crear una nueva instancia de Juego2
+            ventanaJuego2.setVisible(true); // Mostrar la ventana de Juego2
+        }
+    }
+
+    private void activarEscudoTemporal() {
+        invulnerable = true; // Activa invulnerabilidad
+        Timer escudoTimer = new Timer(2000, e -> {
+            invulnerable = false; // Desactiva invulnerabilidad después de 2 segundos
+        });
+        escudoTimer.setRepeats(false); // Solo ejecutar una vez
+        escudoTimer.start();
+    }
+
+    public char[][] getMapa() {
+        return mapa;
+    }
+
+    public int getTamanoCelda() {
+        return tamanoCelda;
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(Juego::new);
+    }
+}
